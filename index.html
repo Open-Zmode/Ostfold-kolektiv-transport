@@ -1,0 +1,590 @@
+
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Østfold Transit</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d0505;
+  --panel:rgba(16,6,6,0.97);
+  --surface:rgba(22,8,8,0.92);
+  --border:rgba(255,80,80,0.08);
+  --border2:rgba(255,80,80,0.22);
+  --txt:#f0e0e0;
+  --muted:#7a5050;
+  --accent:#e63232;
+  --ok:#34d399;
+  --warn:#f97316;
+  --font:'Space Grotesk',system-ui,sans-serif;
+  --c-bus:#e63232;
+  --c-ferry:#9b59e0;
+  --c-train:#f97316;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--font)}
+#map{position:fixed;inset:0;z-index:0}
+.leaflet-container{background:#090303 !important}
+.leaflet-control-zoom a{background:var(--surface) !important;color:var(--txt) !important;border-color:var(--border2) !important}
+.leaflet-control-zoom a:hover{background:rgba(230,50,50,.15) !important}
+.leaflet-control-attribution{background:rgba(0,0,0,.5) !important;color:var(--muted) !important;font-size:9px !important;backdrop-filter:blur(4px)}
+.leaflet-control-attribution a{color:var(--muted) !important}
+
+/* TOPBAR */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:600;height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--panel);backdrop-filter:blur(20px);border-bottom:1px solid var(--border2)}
+#logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--txt);white-space:nowrap;line-height:1}
+#logo span{color:var(--accent)}
+.live-pill{display:flex;align-items:center;gap:5px;background:rgba(230,50,50,.1);border:1px solid rgba(230,50,50,.3);border-radius:100px;padding:3px 9px;font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.8px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.pulse{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.2;transform:scale(.6)}}
+#search-box{position:relative;flex:1;max-width:320px}
+#search-input{width:100%;background:rgba(255,80,80,.04);border:1px solid var(--border2);border-radius:8px;padding:8px 14px 8px 34px;color:var(--txt);font-family:var(--font);font-size:13px;font-weight:500;outline:none;transition:border-color .2s,background .2s}
+#search-input:focus{border-color:rgba(230,50,50,.5);background:rgba(255,80,80,.07)}
+#search-input::placeholder{color:var(--muted)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+#search-results{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--panel);border:1px solid var(--border2);border-radius:10px;overflow-y:auto;max-height:280px;z-index:700;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+#search-results.open{display:block}
+.sr-item{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--border)}
+.sr-item:last-child{border-bottom:none}
+.sr-item:hover{background:rgba(230,50,50,.06)}
+.sr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sr-name{font-size:13px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-type{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+#topbar-right{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:10px}
+.countdown{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.cd-track{width:40px;height:2px;background:rgba(255,80,80,.1);border-radius:1px;overflow:hidden}
+.cd-fill{height:100%;background:var(--accent);border-radius:1px;transition:width 1s linear}
+
+/* SIDE PANEL */
+#side-panel{position:fixed;left:12px;top:64px;z-index:500;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 76px);overflow-y:auto}
+#side-panel::-webkit-scrollbar{width:0}
+.panel-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:13px 15px;backdrop-filter:blur(12px);min-width:185px}
+.card-title{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:11px}
+.legend-row{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:12px;font-weight:500;color:var(--txt)}
+.legend-row:last-child{margin-bottom:0}
+.ldot{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.18)}
+.sp-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:12px}
+.sp-row:last-child{margin-bottom:0}
+.sp-label{color:var(--muted);font-weight:500}
+.sp-val{color:var(--txt);font-weight:700}
+.sp-val.ok{color:var(--ok)}
+.sp-val.warn{color:var(--warn)}
+
+/* DRAWER */
+#drawer{position:fixed;bottom:0;left:0;right:0;z-index:600;background:var(--panel);backdrop-filter:blur(24px);border-top:1px solid var(--border2);transform:translateY(100%);transition:transform .38s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;max-height:55vh}
+#drawer.open{transform:translateY(0)}
+#drawer-header{display:flex;align-items:flex-start;padding:14px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0;gap:10px}
+#drawer-info{flex:1}
+#drawer-name{font-size:17px;font-weight:700;line-height:1.2}
+#drawer-meta{font-size:11px;color:var(--muted);margin-top:3px}
+#drawer-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;border:1px solid}
+#drawer-close{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);border:none;cursor:pointer;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:background .15s}
+#drawer-close:hover{background:rgba(230,50,50,.15);color:var(--txt)}
+#dep-container{overflow-y:auto;flex:1;padding:12px 18px 18px}
+#dep-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}
+.dep-card{background:rgba(230,50,50,.03);border:1px solid var(--border);border-radius:10px;padding:11px 13px;transition:border-color .2s,background .2s}
+.dep-card:hover{border-color:var(--border2);background:rgba(230,50,50,.06)}
+.dep-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.dep-badge{min-width:28px;height:22px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;border-radius:5px;flex-shrink:0;padding:0 5px}
+.dep-time{font-size:18px;font-weight:700;line-height:1;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px}
+.dep-delay{font-size:10px;color:var(--warn);font-weight:600}
+.dep-dest{font-size:12px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dep-rt{font-size:9px;color:var(--ok);font-weight:600;margin-top:3px;display:flex;align-items:center;gap:3px}
+.dep-rt::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--ok)}
+.dep-empty{grid-column:1/-1;padding:28px;text-align:center;font-size:13px;color:var(--muted);font-weight:500}
+.dep-loading{grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:13px}
+
+/* POPUP */
+.leaflet-popup-content-wrapper{background:var(--panel) !important;border:1px solid var(--border2) !important;border-radius:10px !important;padding:0 !important;box-shadow:0 12px 40px rgba(0,0,0,.7) !important;backdrop-filter:blur(20px)}
+.leaflet-popup-content{margin:0 !important}
+.leaflet-popup-tip-container{display:none !important}
+.leaflet-popup-close-button{color:var(--muted) !important;font-size:16px !important;top:6px !important;right:8px !important}
+.leaflet-popup-close-button:hover{color:var(--txt) !important;background:transparent !important}
+.hp{padding:12px 16px;min-width:175px;max-width:230px}
+.hp-name{font-size:14px;font-weight:700;margin-bottom:8px;padding-right:18px;line-height:1.2}
+.hp-dep{display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--border)}
+.hp-time{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--accent);min-width:50px;letter-spacing:.5px}
+.hp-line{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;color:#fff;flex-shrink:0}
+.hp-dest{font-size:11px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.hp-loading{font-size:11px;color:var(--muted);padding:6px 0;border-top:1px solid var(--border)}
+
+/* MARKERS */
+.s-marker{cursor:pointer;border-radius:50%;border:2px solid rgba(255,255,255,.2);transition:transform .12s,box-shadow .2s}
+.s-marker:hover{transform:scale(1.9) !important;box-shadow:0 0 0 4px rgba(230,50,50,.18)}
+.t-marker{border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:11px;color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.22);padding:0 4px;white-space:nowrap}
+
+/* LOADING */
+#loading-screen{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .5s ease}
+#loading-screen.out{opacity:0;pointer-events:none}
+.ls-logo{font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:2px;color:var(--txt);line-height:1}
+.ls-logo span{color:var(--accent)}
+.ls-sub{font-size:13px;color:var(--muted);font-weight:500}
+.ls-bar{width:220px;height:2px;background:rgba(230,50,50,.1);border-radius:1px;overflow:hidden}
+.ls-bar-inner{height:100%;background:var(--accent);border-radius:1px;animation:loadbar 1.2s ease-in-out infinite}
+@keyframes loadbar{0%{width:0;margin-left:0}60%{width:50%;margin-left:25%}100%{width:0;margin-left:100%}}
+#ls-msg{font-size:11px;color:var(--muted);letter-spacing:.5px;min-height:16px}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);z-index:9000;background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:10px 18px;font-size:12px;font-weight:500;color:var(--warn);white-space:nowrap;transition:transform .3s ease;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(230,50,50,.15);border-radius:2px}
+@media(max-width:600px){#side-panel{display:none}#search-box{max-width:none}#drawer{max-height:72vh}#dep-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="ls-logo">Østfold <span>Transit</span></div>
+  <div class="ls-sub">Live buss, tog &amp; ferge</div>
+  <div class="ls-bar"><div class="ls-bar-inner"></div></div>
+  <div id="ls-msg">Starter opp…</div>
+</div>
+
+<div id="map"></div>
+
+<div id="topbar">
+  <div id="logo">Østfold <span>Transit</span></div>
+  <div class="live-pill"><div class="pulse"></div>LIVE</div>
+  <div id="search-box">
+    <span class="search-icon">🔍</span>
+    <input id="search-input" type="text" placeholder="Søk holdeplass…" autocomplete="off" spellcheck="false">
+    <div id="search-results"></div>
+  </div>
+  <div id="topbar-right">
+    <div class="countdown">
+      <div class="cd-track"><div class="cd-fill" id="cd-fill"></div></div>
+      <span id="cd-txt">20s</span>
+    </div>
+  </div>
+</div>
+
+<div id="side-panel">
+  <div class="panel-card">
+    <div class="card-title">Holdeplasser</div>
+    <div class="legend-row"><div class="ldot" style="background:var(--c-bus)"></div>Bussholdeplass</div>
+    <div class="legend-row"><div class="ldot" style="background:var(--c-ferry)"></div>Byfergen Fredrikstad</div>
+    <div class="legend-row"><div class="ldot" style="background:var(--c-train)"></div>Togstasjon</div>
+  </div>
+  <div class="panel-card">
+    <div class="card-title">Live Status</div>
+    <div class="sp-row"><span class="sp-label">Holdeplasser</span><span class="sp-val" id="stat-stops">—</span></div>
+    <div class="sp-row"><span class="sp-label">Kjøretøy</span><span class="sp-val" id="stat-vehicles">—</span></div>
+    <div class="sp-row"><span class="sp-label">API</span><span class="sp-val ok" id="stat-api">OK</span></div>
+    <div class="sp-row"><span class="sp-label">Oppdatert</span><span class="sp-val" id="stat-time">—</span></div>
+  </div>
+</div>
+
+<div id="drawer">
+  <div id="drawer-header">
+    <div id="drawer-info">
+      <div id="drawer-name"></div>
+      <div id="drawer-meta"></div>
+      <div id="drawer-badge"></div>
+    </div>
+    <button id="drawer-close">✕</button>
+  </div>
+  <div id="dep-container">
+    <div id="dep-grid"><div class="dep-empty">Velg en holdeplass for å se avganger</div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── CONFIG — identical to the working simple version ────────────────────────
+const ET_CLIENT = 'ostfold-transit';           // same client name that works
+const JP_API    = 'https://api.entur.io/journey-planner/v3/graphql';
+const VEH_API   = 'https://api.entur.io/realtime/v2/vehicles/graphql';
+
+// Ferry detection — same as working version
+const FERRY_IDS   = ['NSR:StopPlace:59742', 'NSR:StopPlace:59741'];
+const FERRY_FRAGS = ['ferge', 'fergen', 'byfergen'];
+
+let map, stops = [], stopMarkers = {}, vehicleMarkers = {};
+let activeStop = null, countdown = 20, cdTimer = null;
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+function setMsg(m) { $('ls-msg').textContent = m; }
+function hideLoading() { const e = $('loading-screen'); e.classList.add('out'); setTimeout(() => e.remove(), 600); }
+let _ti;
+function showToast(m) { const e = $('toast'); e.textContent = m; e.classList.add('show'); clearTimeout(_ti); _ti = setTimeout(() => e.classList.remove('show'), 3500); }
+function nowTime() { return new Date().toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' }); }
+function fmtTime(iso) {
+  const dt = new Date(iso), d = Math.round((dt - Date.now()) / 60000);
+  if (d <= 0) return 'Nå';
+  if (d < 60)  return d + ' min';
+  return dt.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Type detection — same logic as working version
+function stopType(s) {
+  if (FERRY_IDS.includes(s.id) || FERRY_FRAGS.some(f => s.name.toLowerCase().includes(f))) return 'ferry';
+  if (s.name.toLowerCase().includes('stasjon')) return 'train';
+  return 'bus';
+}
+function typeColor(t) {
+  return t === 'ferry' ? '#9b59e0' : t === 'train' ? '#f97316' : '#e63232';
+}
+
+// ─── MAP ─────────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { center: [59.21, 10.94], zoom: 13, zoomControl: false, attributionControl: false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.control.attribution({ position: 'bottomleft', prefix: '© <a href="https://carto.com">CARTO</a> © <a href="https://openstreetmap.org">OSM</a>' }).addTo(map);
+}
+
+// ─── LOAD STOPS — EXACT query from the working simple version ─────────────────
+// Only fields that are confirmed working: id, name, quays{latitude, longitude}
+// NO transportMode (that field breaks the query silently)
+async function loadStops() {
+  const query = `{
+    stopPlacesByBbox(
+      minimumLatitude: 59.0
+      maximumLatitude: 59.45
+      minimumLongitude: 10.55
+      maximumLongitude: 11.30
+    ) {
+      id
+      name
+      quays {
+        latitude
+        longitude
+      }
+    }
+  }`;
+
+  const res = await fetch(JP_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
+    body: JSON.stringify({ query })
+  });
+
+  const json = await res.json();
+
+  if (json.errors) {
+    console.error('[loadStops] GraphQL errors:', json.errors);
+    throw new Error(json.errors[0].message);
+  }
+
+  const places = json.data?.stopPlacesByBbox || [];
+  console.log('[loadStops] raw places returned:', places.length);
+
+  places.forEach(p => {
+    if (!p.quays || !p.quays.length) return;
+    const q = p.quays[0];
+    const lat = parseFloat(q.latitude), lng = parseFloat(q.longitude);
+    if (!lat || !lng) return;
+    stops.push({ id: p.id, name: p.name, lat, lng });
+  });
+
+  console.log('[loadStops] stops added:', stops.length);
+}
+
+// ─── RENDER STOPS ─────────────────────────────────────────────────────────────
+function renderStops() {
+  Object.values(stopMarkers).forEach(m => m.remove());
+  stopMarkers = {};
+
+  stops.forEach(stop => {
+    const t   = stopType(stop);
+    const col = typeColor(t);
+    const sz  = t === 'ferry' ? 14 : t === 'train' ? 11 : 8;
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="s-marker" style="width:${sz}px;height:${sz}px;background:${col}"></div>`,
+      iconSize: [sz, sz], iconAnchor: [sz/2, sz/2],
+    });
+
+    const m = L.marker([stop.lat, stop.lng], {
+      icon,
+      zIndexOffset: t === 'ferry' ? 500 : t === 'train' ? 200 : 0
+    }).addTo(map);
+
+    m.on('click', () => openDrawer(stop));
+
+    // Hover popup
+    let pop = null;
+    m.on('mouseover', () => {
+      pop = L.popup({ closeButton: true, offset: [0, -4], autoPan: false, maxWidth: 240 })
+        .setLatLng([stop.lat, stop.lng])
+        .setContent(hoverHtml(stop.name, null))
+        .openOn(map);
+      fetchDeps(stop.id, 3).then(deps => { if (pop) pop.setContent(hoverHtml(stop.name, deps)); });
+    });
+    m.on('mouseout', () => { setTimeout(() => { if (pop) { map.closePopup(pop); pop = null; } }, 250); });
+
+    stopMarkers[stop.id] = m;
+  });
+
+  $('stat-stops').textContent = stops.length;
+}
+
+function hoverHtml(name, deps) {
+  if (!deps) return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">Laster avganger…</div></div>`;
+  if (!deps.length) return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">Ingen avganger</div></div>`;
+  const rows = deps.map(d => `
+    <div class="hp-dep">
+      <span class="hp-time">${d.timeStr}</span>
+      ${d.line ? `<span class="hp-line" style="background:${typeColor(d.modeType)}">${d.line}</span>` : ''}
+      <span class="hp-dest">${d.dest}</span>
+    </div>`).join('');
+  return `<div class="hp"><div class="hp-name">${name}</div>${rows}</div>`;
+}
+
+// ─── VEHICLES ────────────────────────────────────────────────────────────────
+async function fetchVehicles() {
+  const query = `{
+    ofo: vehicles(codespaceId:"OFO", mode:bus) {
+      vehicleRef
+      location { latitude longitude }
+      line { publicCode }
+    }
+    vy: vehicles(codespaceId:"VYG", mode:rail) {
+      vehicleRef
+      location { latitude longitude }
+      line { publicCode }
+    }
+  }`;
+  try {
+    const res = await fetch(VEH_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
+      body: JSON.stringify({ query })
+    });
+    const json = await res.json();
+    if (json.errors) json.errors.forEach(e => console.warn('[vehicles]', e.message));
+    const inBox = v => {
+      const la = v.location?.latitude, lo = v.location?.longitude;
+      return la && lo && la >= 59.0 && la <= 59.45 && lo >= 10.55 && lo <= 11.30;
+    };
+    return [
+      ...(json.data?.ofo  || []).filter(inBox).map(v => ({ ...v, _mode: 'bus'   })),
+      ...(json.data?.vy   || []).filter(inBox).map(v => ({ ...v, _mode: 'train' })),
+    ];
+  } catch(e) { console.warn('[vehicles]', e.message); return null; }
+}
+
+function updateVehicles(vehicles) {
+  if (!vehicles) { $('stat-api').textContent = 'Feil'; $('stat-api').className = 'sp-val warn'; return; }
+  $('stat-api').textContent = 'OK'; $('stat-api').className = 'sp-val ok';
+
+  const seen = new Set();
+  vehicles.forEach(v => {
+    if (!v.location?.latitude) return;
+    const lat = v.location.latitude, lng = v.location.longitude;
+    const code = v.line?.publicCode || '?';
+    const ref  = v.vehicleRef || `${lat},${lng}`;
+    seen.add(ref);
+    const col = v._mode === 'train' ? '#f97316' : '#e63232';
+
+    if (vehicleMarkers[ref]) {
+      vehicleMarkers[ref].setLatLng([lat, lng]);
+    } else {
+      const sz = v._mode === 'train' ? 26 : 22;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="t-marker" style="min-width:${sz}px;height:${sz}px;background:${col}">${code}</div>`,
+        iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+      });
+      const m = L.marker([lat, lng], { icon, zIndexOffset: 600 }).addTo(map);
+      m.bindTooltip(`Linje ${code}`, { direction: 'top', offset: [0, -14] });
+      m.on('click', () => { const n = nearestStop(lat, lng); if (n) openDrawer(n); });
+      vehicleMarkers[ref] = m;
+    }
+  });
+
+  for (const ref of Object.keys(vehicleMarkers)) {
+    if (!seen.has(ref)) { vehicleMarkers[ref].remove(); delete vehicleMarkers[ref]; }
+  }
+  $('stat-vehicles').textContent = Object.keys(vehicleMarkers).length || '0';
+}
+
+function nearestStop(lat, lng) {
+  let b = null, bd = Infinity;
+  stops.forEach(s => { const d = Math.hypot(s.lat - lat, s.lng - lng); if (d < bd) { bd = d; b = s; } });
+  return b;
+}
+
+// ─── DEPARTURES — exact same query structure as working simple version ────────
+async function fetchDeps(stopId, n = 9) {
+  const query = `{
+    stopPlace(id: "${stopId}") {
+      estimatedCalls(numberOfDepartures: ${n}) {
+        expectedDepartureTime
+        aimedDepartureTime
+        realtime
+        destinationDisplay { frontText }
+        serviceJourney {
+          line { publicCode transportMode }
+        }
+        quay { publicCode }
+      }
+    }
+  }`;
+  try {
+    const res = await fetch(JP_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
+      body: JSON.stringify({ query })
+    });
+    const json = await res.json();
+    if (json.errors) json.errors.forEach(e => console.warn('[deps]', e.message));
+    const calls = json.data?.stopPlace?.estimatedCalls || [];
+    return calls.map(c => {
+      const raw = (c.serviceJourney?.line?.transportMode || 'bus').toLowerCase();
+      const modeType = raw === 'rail' || raw === 'train' ? 'train'
+                     : raw === 'water' || raw === 'ferry' ? 'ferry'
+                     : 'bus';
+      const delaySec = Math.max(0, Math.round(
+        (new Date(c.expectedDepartureTime) - new Date(c.aimedDepartureTime)) / 1000
+      ));
+      return {
+        timeStr:  fmtTime(c.expectedDepartureTime),
+        dest:     c.destinationDisplay?.frontText || '—',
+        line:     c.serviceJourney?.line?.publicCode || '',
+        modeType,
+        realtime: c.realtime,
+        delaySec,
+        platform: c.quay?.publicCode || null,
+      };
+    });
+  } catch(e) { console.warn('[deps]', e.message); return null; }
+}
+
+// ─── DRAWER ───────────────────────────────────────────────────────────────────
+async function openDrawer(stop) {
+  activeStop = stop;
+  $('drawer-name').textContent = stop.name;
+  $('drawer-meta').textContent = 'Henter avganger…';
+  const t = stopType(stop), col = typeColor(t), badge = $('drawer-badge');
+  badge.textContent = t === 'ferry' ? '⛴ Byfergen' : t === 'train' ? '🚆 Tog' : '🚌 Buss';
+  badge.style.cssText = `color:${col};border-color:${col}44;background:${col}11`;
+  $('dep-grid').innerHTML = '<div class="dep-loading">⏳ Laster…</div>';
+  $('drawer').classList.add('open');
+  await loadDeps(stop);
+}
+
+async function loadDeps(stop) {
+  const deps = await fetchDeps(stop.id);
+  $('drawer-meta').textContent = `Neste avganger · ${nowTime()}`;
+  if (!deps) { $('dep-grid').innerHTML = '<div class="dep-empty">⚠ Kunne ikke laste avganger</div>'; return; }
+  if (!deps.length) { $('dep-grid').innerHTML = '<div class="dep-empty">Ingen kommende avganger</div>'; return; }
+
+  $('dep-grid').innerHTML = deps.map(d => {
+    const col = typeColor(d.modeType);
+    const icon = d.modeType === 'ferry' ? '⛴' : d.modeType === 'train' ? '🚆' : '';
+    const delMin = Math.round(d.delaySec / 60);
+    return `<div class="dep-card">
+      <div class="dep-header">
+        <div class="dep-badge" style="background:${col}">${icon || d.line || '?'}</div>
+        <div>
+          <div class="dep-time">${d.timeStr}</div>
+          ${delMin > 0 ? `<div class="dep-delay">+${delMin} min</div>` : ''}
+        </div>
+      </div>
+      <div class="dep-dest">${d.dest}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px">
+        ${d.realtime ? '<div class="dep-rt">sanntid</div>' : '<div></div>'}
+        ${d.platform ? `<div style="font-size:9px;color:var(--muted);font-weight:600">Pl. ${d.platform}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('drawer-close').addEventListener('click', () => { $('drawer').classList.remove('open'); activeStop = null; });
+
+// ─── SEARCH ───────────────────────────────────────────────────────────────────
+const si = $('search-input'), sr = $('search-results');
+
+si.addEventListener('input', () => {
+  const q = si.value.trim().toLowerCase();
+  if (q.length < 2) { sr.classList.remove('open'); return; }
+  const hits = stops.filter(s => s.name.toLowerCase().includes(q)).slice(0, 14);
+  if (!hits.length) {
+    sr.innerHTML = '<div class="sr-item"><span class="sr-name" style="color:var(--muted)">Ingen treff</span></div>';
+  } else {
+    sr.innerHTML = hits.map(s => {
+      const t = stopType(s);
+      return `<div class="sr-item" data-id="${s.id}">
+        <div class="sr-dot" style="background:${typeColor(t)}"></div>
+        <span class="sr-name">${s.name}</span>
+        <span class="sr-type">${t === 'ferry' ? 'Ferge' : t === 'train' ? 'Tog' : 'Buss'}</span>
+      </div>`;
+    }).join('');
+  }
+  sr.classList.add('open');
+});
+
+sr.addEventListener('click', e => {
+  const item = e.target.closest('.sr-item[data-id]'); if (!item) return;
+  const stop = stops.find(s => s.id === item.dataset.id); if (!stop) return;
+  sr.classList.remove('open'); si.value = stop.name;
+  map.flyTo([stop.lat, stop.lng], 16, { duration: 1, easeLinearity: .5 });
+  setTimeout(() => openDrawer(stop), 1000);
+});
+
+document.addEventListener('click', e => { if (!e.target.closest('#search-box')) sr.classList.remove('open'); });
+si.addEventListener('keydown', e => { if (e.key === 'Escape') { sr.classList.remove('open'); si.blur(); } });
+
+// ─── COUNTDOWN + REFRESH ──────────────────────────────────────────────────────
+function startCountdown() {
+  countdown = 20; if (cdTimer) clearInterval(cdTimer);
+  cdTimer = setInterval(async () => {
+    countdown--;
+    $('cd-fill').style.width = Math.max(0, (countdown / 20) * 100) + '%';
+    $('cd-txt').textContent = countdown + 's';
+    if (countdown <= 0) { clearInterval(cdTimer); await tick(); startCountdown(); }
+  }, 1000);
+}
+
+async function tick() {
+  $('stat-time').textContent = nowTime();
+  const v = await fetchVehicles(); if (v !== null) updateVehicles(v);
+  if (activeStop) await loadDeps(activeStop);
+}
+
+// ─── BOOT — same structure as working simple version ──────────────────────────
+window.onload = async () => {
+  setMsg('Bygger kart…');
+  initMap();
+
+  setMsg('Laster holdeplasser…');
+  try {
+    await loadStops();
+  } catch(e) {
+    console.error('[boot] loadStops failed:', e);
+    showToast('⚠ Feil ved lasting av holdeplasser: ' + e.message);
+  }
+
+  if (!stops.length) {
+    showToast('⚠ Ingen holdeplasser funnet');
+  }
+
+  setMsg('Plasserer på kart…');
+  renderStops();
+
+  setMsg('Henter kjøretøy…');
+  const v = await fetchVehicles();
+  if (v !== null) updateVehicles(v);
+
+  $('stat-time').textContent = nowTime();
+  setMsg('Klar!');
+  setTimeout(hideLoading, 400);
+  startCountdown();
+};
+</script>
+</body>
+</html>
